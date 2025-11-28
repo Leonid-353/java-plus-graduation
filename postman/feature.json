@@ -1,0 +1,67 @@
+{
+	"info": {
+		"_postman_id": "cdd0db93-a249-4d86-bbbb-b7af18b44da3",
+		"name": "feature",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "39296065"
+	},
+	"item": [
+		{
+			"name": "Validation",
+			"item": [
+				{
+					"name": "Добавление комментария без заголовка",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Запрос без заголовка X-Sharer-Event-Id должен вернуть ошибку 400\", function () {\r",
+									"    pm.response.to.have.status(400);\r",
+									"\r",
+									"    const response = pm.response.json();\r",
+									"    console.log(\"Ответ сервера:\", response);\r",
+									"\r",
+									"    pm.expect(response).to.have.property('error');\r",
+									"    pm.expect(response.error).to.equal('Bad Request', 'Сообщение об ошибке должно быть \"Bad Request\"');\r",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/events/:eventId/comments",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"events",
+								":eventId",
+								"comments"
+							],
+							"variable": [
+								{
+									"key": "eventId",
+									"value": "{{eventId}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "default"
+		}
+	]
+}
