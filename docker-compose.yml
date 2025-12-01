@@ -11,29 +11,29 @@ services:
       - POSTGRES_USER=dbuser
       - POSTGRES_PASSWORD=12345
     volumes:
-      - ./main-service/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./core/main-service/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
       timeout: 5s
       interval: 5s
       retries: 10
 
-  ewm-service:
-    build: main-service
-    image: ewm-service
-    container_name: ewm-service
-    ports:
-      - "8080:8080"
-    depends_on:
-      ewm-db:
-        condition: service_healthy
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://ewm-db:5432/ewmdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
-      - STATS_SERVER_URL=http://stats-server:9090
-      - SPRING_SQL_INIT_MODE=always
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=none
+#  ewm-service:
+#    build: main-service
+#    image: ewm-service
+#    container_name: ewm-service
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      ewm-db:
+#        condition: service_healthy
+#    environment:
+#      - SPRING_DATASOURCE_URL=jdbc:postgresql://ewm-db:5432/ewmdb
+#      - SPRING_DATASOURCE_USERNAME=dbuser
+#      - SPRING_DATASOURCE_PASSWORD=12345
+#      - STATS_SERVER_URL=http://stats-server:9090
+#      - SPRING_SQL_INIT_MODE=always
+#      - SPRING_JPA_HIBERNATE_DDL_AUTO=none
 
   stats-db:
     image: postgres:16.1
@@ -52,16 +52,16 @@ services:
       interval: 5s
       retries: 10
 
-  stats-server:
-    build: stats
-    image: stats-server
-    container_name: stats-server
-    ports:
-      - "9090:9090"
-    depends_on:
-      stats-db:
-        condition: service_healthy
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://stats-db:5432/statsdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
+#  stats-server:
+#    build: stats
+#    image: stats-server
+#    container_name: stats-server
+#    ports:
+#      - "9090:9090"
+#    depends_on:
+#      stats-db:
+#        condition: service_healthy
+#    environment:
+#      - SPRING_DATASOURCE_URL=jdbc:postgresql://stats-db:5432/statsdb
+#      - SPRING_DATASOURCE_USERNAME=dbuser
+#      - SPRING_DATASOURCE_PASSWORD=12345
