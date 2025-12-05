@@ -1,94 +1,30 @@
 package ru.practicum.service.stats.client;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import ru.practicum.service.stats.GetStatsRequest;
+import feign.FeignException;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 import ru.practicum.service.stats.StatsDtoRequest;
 import ru.practicum.service.stats.StatsDtoResponse;
 
-import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
 import java.util.List;
 
-@Service
-public class StatsClient {
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private final RestClient restClient;
+@FeignClient(name = "stats-server")
+public interface StatsClient {
 
-    @Autowired
-    public StatsClient(@Value("${stats-server.url}") String serverUrl) {
-        this.restClient = RestClient.builder()
-                .baseUrl(serverUrl)
-                .build();
-    }
+    @PostMapping("/hit")
+    @ResponseStatus(HttpStatus.CREATED)
+    void hit(@Valid @RequestBody StatsDtoRequest request) throws FeignException;
 
-    public void saveHit(StatsDtoRequest request) {
-        restClient.post()
-                .uri("/hit")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .toBodilessEntity();
-    }
-
-    public List<StatsDtoResponse> getStats(GetStatsRequest request) {
-        StringBuilder uriBuilder = new StringBuilder("/stats?start={start}&end={end}");
-
-        if (request.getUnique() != null) {
-            uriBuilder.append("&unique={unique}");
-        }
-
-        if (request.hasUris()) {
-            for (int i = 0; i < request.getUris().size(); i++) {
-                uriBuilder.append("&uris={uri").append(i).append("}");
-            }
-        }
-
-        return restClient.get()
-                .uri(uriBuilder.toString(), buildUriVariables(request))
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<StatsDtoResponse>>() {
-                });
-    }
-
-    private Object[] buildUriVariables(GetStatsRequest request) {
-        Object[] baseVars = new Object[]{
-                request.getStart().toLocalDateTime().format(FORMATTER),
-                request.getEnd().toLocalDateTime().format(FORMATTER)
-        };
-
-        if (request.getUnique() != null && !request.hasUris()) {
-            return new Object[]{
-                    baseVars[0], baseVars[1], request.getUnique()
-            };
-        }
-
-        if (request.hasUris() && request.getUnique() == null) {
-            Object[] uriVars = new Object[2 + request.getUris().size()];
-            System.arraycopy(baseVars, 0, uriVars, 0, 2);
-
-            for (int i = 0; i < request.getUris().size(); i++) {
-                uriVars[2 + i] = request.getUris().get(i);
-            }
-
-            return uriVars;
-        }
-
-        if (request.hasUris() && request.getUnique() != null) {
-            Object[] uriVars = new Object[3 + request.getUris().size()];
-            System.arraycopy(baseVars, 0, uriVars, 0, 2);
-            uriVars[2] = request.getUnique();
-
-            for (int i = 0; i < request.getUris().size(); i++) {
-                uriVars[3 + i] = request.getUris().get(i);
-            }
-
-            return uriVars;
-        }
-
-        return baseVars;
-    }
+    @GetMapping("/stats")
+    @ResponseStatus(HttpStatus.OK)
+    List<StatsDtoResponse> findStats(
+            @RequestParam("start") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") @NotNull LocalDateTime start,
+            @RequestParam("end") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") @NotNull LocalDateTime end,
+            @RequestParam(name = "uris", required = false) List<String> uris,
+            @RequestParam(name = "unique", defaultValue = "false") Boolean unique) throws FeignException;
 }
