@@ -1,0 +1,35 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: comment-service
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:6434/commentdb
+    username: dbuser
+    password: 12345
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: always
+
+hibernate:
+  jdbc:
+    time_zone: UTC
+
+logging:
+  level:
+    ru.practicum: TRACE
+    org.springframework.web: INFO
+    org.springframework.orm.jpa: INFO
+    org.springframework.orm.jpa.JpaTransactionManager: DEBUG
+    org.springframework.transaction: INFO
+    org.springframework.transaction.interceptor: TRACE

@@ -5,20 +5,48 @@ spring:
     import: "configserver:"
   cloud:
     config:
-      fail-fast: true
+      fail-fast: ${SPRING_CLOUD_CONFIG_FAIL_FAST:true}
       retry:
         useRandomPolicy: true
         max-interval: 6000
+        max-attempts: 10
       discovery:
-        enabled: true
-        serviceId: config-server
+        enabled: ${SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED:true}
+        serviceId: ${SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID:config-server}
+  gateway:
+    discovery:
+      locator:
+        enabled: ${SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED:true}
+        lower-case-service-id: ${SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_LOWER_CASE_SERVICE_ID:true}
+    httpclient:
+      connect-timeout: 2000
+      response-timeout: 5s
+    metrics:
+      enabled: true
+    logging:
+      level:
+        org.springframework.cloud.gateway: DEBUG
 
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+    enabled: ${EUREKA_CLIENT_ENABLED:true}
+    fetch-registry: ${EUREKA_CLIENT_FETCH_REGISTRY:true}
+    register-with-eureka: ${EUREKA_CLIENT_REGISTER_WITH_EUREKA:true}
+    initial-instance-info-replication-interval-seconds: 5
+    registry-fetch-interval-seconds: 3
   instance:
-    preferIpAddress: true
-    hostname: localhost
-    instance-id: "${spring.application.name}:${random.value}"
-    leaseRenewalIntervalInSeconds: 10
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFER_IP_ADDRESS:false}
+    non-secure-port: ${EUREKA_INSTANCE_NON_SECURE_PORT:${server.port}}
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: INFO
+    org.springframework.web: INFO
