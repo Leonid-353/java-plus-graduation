@@ -36,5 +36,5 @@ public interface EventService {
 
     EventFullDto getEventByUserFeign(Long userId, Long eventId);
 
-    void updateEventForRequests(Long eventId, EventFullDto eventFullDto);
+    void updateEventForRequests(Long eventId, Long confirmedRequests);
 }

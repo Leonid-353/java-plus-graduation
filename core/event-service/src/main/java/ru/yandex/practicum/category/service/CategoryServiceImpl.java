@@ -27,12 +27,14 @@ public class CategoryServiceImpl implements CategoryService {
     final EventRepository eventRepository;
 
     @Override
+    @Transactional
     public CategoryResponseDto createCategory(CategoryRequestDto categoryRequestDto) {
         validateNameCategory(categoryRequestDto);
         return categoryMapper.toCategoryResponseDto(categoryRepository.save(categoryMapper.toCategory(categoryRequestDto)));
     }
 
     @Override
+    @Transactional
     public CategoryResponseDto updateCategory(Long id, CategoryRequestDto categoryRequestDto) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Category not found: " + id));
@@ -55,6 +57,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional
     public void deleteCategory(Long id) {
         if (eventRepository.existsByCategoryId(id)) {
             throw new ConflictException("Category in events" + id);
@@ -63,6 +66,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Collection<CategoryResponseDto> getCategories(Integer from, Integer size) {
         Pageable pageable = PageRequest.of(from / size, size);
         return categoryRepository.findAll(pageable).stream().map(categoryMapper::toCategoryResponseDto).toList();

@@ -27,7 +27,7 @@ public class EventFeignController implements EventClient {
     }
 
     @Override
-    public void updateEventForRequests(Long eventId, EventFullDto eventFullDto) {
-        eventService.updateEventForRequests(eventId, eventFullDto);
+    public void updateEventForRequests(Long eventId, Long confirmedRequests) {
+        eventService.updateEventForRequests(eventId, confirmedRequests);
     }
 }
