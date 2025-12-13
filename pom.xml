@@ -12,7 +12,7 @@
 
 	<name>Explore With Me</name>
     <modules>
-        <module>stats</module>
+        <module>stats-service</module>
 		<module>infra</module>
 		<module>core</module>
 	</modules>
@@ -54,7 +54,7 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!-- Utilities -->
+			<!--       Utilities       -->
 			<dependency>
 				<groupId>org.mapstruct</groupId>
 				<artifactId>mapstruct</artifactId>
@@ -72,6 +72,19 @@
 				<artifactId>querydsl-jpa</artifactId>
 				<version>${querydsl.version}</version>
 				<classifier>jakarta</classifier>
+			</dependency>
+
+			<!--       Internal Modules       -->
+			<dependency>
+				<groupId>ru.practicum</groupId>
+				<artifactId>interaction-api</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>ru.practicum</groupId>
+				<artifactId>user-service</artifactId>
+				<version>${project.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
