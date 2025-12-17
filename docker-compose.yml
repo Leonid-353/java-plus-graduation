@@ -1,67 +1,390 @@
 version: '3.8'
 
-services:
-  ewm-db:
-    image: postgres:16.1
-    container_name: ewm-db
-    ports:
-      - "6432:5432"
-    environment:
-      - POSTGRES_DB=ewmdb
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=12345
-    volumes:
-      - ./core/main-service/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    healthcheck:
-      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
-      timeout: 5s
-      interval: 5s
-      retries: 10
+networks:
+  explore-network:
+    driver: bridge
+    name: explore-with-me-network
 
-#  ewm-service:
-#    build: main-service
-#    image: ewm-service
-#    container_name: ewm-service
-#    ports:
-#      - "8080:8080"
-#    depends_on:
-#      ewm-db:
-#        condition: service_healthy
-#    environment:
-#      - SPRING_DATASOURCE_URL=jdbc:postgresql://ewm-db:5432/ewmdb
-#      - SPRING_DATASOURCE_USERNAME=dbuser
-#      - SPRING_DATASOURCE_PASSWORD=12345
-#      - STATS_SERVER_URL=http://stats-server:9090
-#      - SPRING_SQL_INIT_MODE=always
-#      - SPRING_JPA_HIBERNATE_DDL_AUTO=none
+services:
+  discovery-server:
+    build: infra/discovery-server
+    image: discovery-server
+    container_name: discovery-server
+    hostname: discovery-server
+    restart: on-failure
+    ports:
+      - "8761:8761"
+    networks:
+      - explore-network
+    environment:
+      - SERVER_PORT=8761
+      - EUREKA_INSTANCE_HOSTNAME=discovery-server
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8761/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  config-server:
+    build: infra/config-server
+    image: config-server
+    container_name: config-server
+    hostname: config-server
+    restart: on-failure
+    ports:
+      - "0:8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=config-server
+      - EUREKA_INSTANCE_HOSTNAME=config-server
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_INSTANCE_NON_SECURE_PORT_ENABLED=true
+      - EUREKA_CLIENT_ENABLED=true
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  gateway-server:
+    build: infra/gateway-server
+    image: gateway-server
+    container_name: gateway-server
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=gateway-server
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=gateway-server
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=true
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_LOWER_CASE_SERVICE_ID=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   stats-db:
     image: postgres:16.1
     container_name: stats-db
     ports:
       - "5433:5432"
+    networks:
+      - explore-network
     environment:
       - POSTGRES_DB=statsdb
       - POSTGRES_USER=dbuser
       - POSTGRES_PASSWORD=12345
     volumes:
-      - ./stats/stats-server/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./stats-service/stats-server/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
       timeout: 5s
       interval: 5s
       retries: 10
 
-#  stats-server:
-#    build: stats
-#    image: stats-server
-#    container_name: stats-server
-#    ports:
-#      - "9090:9090"
-#    depends_on:
-#      stats-db:
-#        condition: service_healthy
-#    environment:
-#      - SPRING_DATASOURCE_URL=jdbc:postgresql://stats-db:5432/statsdb
-#      - SPRING_DATASOURCE_USERNAME=dbuser
-#      - SPRING_DATASOURCE_PASSWORD=12345
+  event-db:
+    image: postgres:16.1
+    container_name: event-db
+    ports:
+      - "6432:5432"
+    networks:
+      - explore-network
+    environment:
+      - POSTGRES_DB=eventdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    healthcheck:
+      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
+      timeout: 5s
+      interval: 5s
+      retries: 10
+
+  user-db:
+    image: postgres:16.1
+    container_name: user-db
+    ports:
+      - "6433:5432"
+    networks:
+      - explore-network
+    environment:
+      - POSTGRES_DB=userdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    healthcheck:
+      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
+      timeout: 5s
+      interval: 5s
+      retries: 10
+
+  comment-db:
+    image: postgres:16.1
+    container_name: comment-db
+    ports:
+      - "6434:5432"
+    networks:
+      - explore-network
+    environment:
+      - POSTGRES_DB=commentdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    healthcheck:
+      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
+      timeout: 5s
+      interval: 5s
+      retries: 10
+
+  request-db:
+    image: postgres:16.1
+    container_name: request-db
+    ports:
+      - "6435:5432"
+    networks:
+      - explore-network
+    environment:
+      - POSTGRES_DB=requestdb
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=12345
+    healthcheck:
+      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
+      timeout: 5s
+      interval: 5s
+      retries: 10
+
+  stats-server:
+    build:
+      context: ./stats-service/stats-server
+      dockerfile: Dockerfile
+    image: stats-server
+    container_name: stats-server
+    hostname: stats-server
+    restart: on-failure
+    expose:
+      - "8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      stats-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=stats-server
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=stats-server
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://stats-db:5432/statsdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  event-service:
+    build:
+      context: ./core/event-service
+      dockerfile: Dockerfile
+    image: event-service
+    container_name: event-service
+    hostname: event-service
+    restart: on-failure
+    expose:
+      - "8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      event-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=event-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=event-service
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://event-db:5432/eventdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  user-service:
+    build:
+      context: ./core/user-service
+      dockerfile: Dockerfile
+    image: user-service
+    container_name: user-service
+    hostname: user-service
+    restart: on-failure
+    expose:
+      - "8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=user-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=user-service
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://user-db:5432/userdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  comment-service:
+    build:
+      context: ./core/comment-service
+      dockerfile: Dockerfile
+    image: comment-service
+    container_name: comment-service
+    hostname: comment-service
+    restart: on-failure
+    expose:
+      - "8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      comment-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=comment-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=comment-service
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://comment-db:5432/commentdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  request-service:
+    build:
+      context: ./core/request-service
+      dockerfile: Dockerfile
+    image: request-service
+    container_name: request-service
+    hostname: request-service
+    restart: on-failure
+    expose:
+      - "8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      request-db:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=request-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=request-service
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://request-db:5432/requestdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
