@@ -48,7 +48,7 @@ public class AggregationStarter {
 
             while (true) {
                 try {
-                    ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(1000));
+                    ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(5000));
 
                     int messageCount = records.count();
                     if (messageCount > 0) {
@@ -61,14 +61,8 @@ public class AggregationStarter {
                         consumer.commitAsync();
                         log.debug("Смещения зафиксированы");
                     }
-
-                    Thread.sleep(50);
                 } catch (WakeupException ex) {
                     log.info("Получен WakeupException - завершение работы");
-                    break;
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    log.info("Поток прерван");
                     break;
                 } catch (Exception ex) {
                     log.error("Ошибка в цикле обработки", ex);

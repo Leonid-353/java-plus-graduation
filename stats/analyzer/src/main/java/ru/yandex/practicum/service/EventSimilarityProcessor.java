@@ -21,7 +21,6 @@ import java.time.Duration;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class EventSimilarityProcessor {
     static final Duration POLL_TIMEOUT = Duration.ofMillis(5000);
-    static final Duration PROCESSING_DELAY = Duration.ofMillis(50);
 
     final AnalyzerEventSimilarityConsumer consumer;
     final EventSimilarityHandler handler;
@@ -48,14 +47,8 @@ public class EventSimilarityProcessor {
                         consumer.commitAsync();
                         log.debug("Смещения зафиксированы");
                     }
-
-                    Thread.sleep(PROCESSING_DELAY);
                 } catch (WakeupException ex) {
                     log.info("Получен WakeupException - завершение обработки");
-                    break;
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    log.info("Поток обработки прерван");
                     break;
                 } catch (Exception ex) {
                     log.error("Ошибка в цикле обработки", ex);
