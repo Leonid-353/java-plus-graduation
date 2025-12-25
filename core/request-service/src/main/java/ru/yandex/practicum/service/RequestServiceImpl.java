@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.yandex.practicum.CollectorClient;
 import ru.yandex.practicum.dto.event.EventFullDto;
 import ru.yandex.practicum.dto.event.enums.State;
 import ru.yandex.practicum.dto.request.EventRequestStatusUpdateRequest;
@@ -16,19 +17,22 @@ import ru.yandex.practicum.exception.ConflictException;
 import ru.yandex.practicum.exception.NotFoundException;
 import ru.yandex.practicum.feign.EventClient;
 import ru.yandex.practicum.feign.UserClient;
+import ru.yandex.practicum.grpc.stats.action.ActionTypeProto;
 import ru.yandex.practicum.mapper.RequestMapper;
 import ru.yandex.practicum.model.Request;
 import ru.yandex.practicum.repository.RequestRepository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class RequestServiceImpl implements RequestService {
+    final CollectorClient userActionClient;
     private final RequestRepository requestRepository;
     private final UserClient userClient;
     private final EventClient eventClient;
@@ -56,7 +60,11 @@ public class RequestServiceImpl implements RequestService {
             eventClient.updateEventForRequests(eventId, event.getConfirmedRequests() + 1);
         }
 
-        return saveRequestInTransaction(user.getId(), eventId, autoConfirm);
+        ParticipationRequestDto savedRequest = saveRequestInTransaction(user.getId(), eventId, autoConfirm);
+
+        userActionClient.collectUserAction(userId, eventId, ActionTypeProto.ACTION_REGISTER, Instant.now());
+
+        return savedRequest;
     }
 
     @Override

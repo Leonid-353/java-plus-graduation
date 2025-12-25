@@ -6,6 +6,48 @@ networks:
     name: explore-with-me-network
 
 services:
+  kafka:
+    image: confluentinc/confluent-local:7.4.3
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092" # for client connections
+      - "9101:9101" # JMX
+    networks:
+      - explore-network
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092'
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      CLUSTER_ID: 'K0EA9p0yEe6MkAAAAkKsEg'
+    healthcheck:
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  kafka-init-topics:
+    image: confluentinc/confluent-local:7.4.3
+    container_name: kafka-init-topics
+    networks:
+      - explore-network
+    depends_on:
+      - kafka
+    command: "bash -c \
+                'kafka-topics --create --topic stats.user-actions.v1 \
+                             --partitions 1 --replication-factor 1 --if-not-exists \
+                             --bootstrap-server kafka:29092 && \
+                kafka-topics --create --topic stats.events-similarity.v1 \
+                             --partitions 1 --replication-factor 1 --if-not-exists \
+                             --bootstrap-server kafka:29092'"
+    init: true
+
   discovery-server:
     build: infra/discovery-server
     image: discovery-server
@@ -92,19 +134,17 @@ services:
       retries: 3
       start_period: 60s
 
-  stats-db:
+  recommendations-db:
     image: postgres:16.1
-    container_name: stats-db
+    container_name: recommendations-db
     ports:
-      - "5433:5432"
+      - "7432:5432"
     networks:
       - explore-network
     environment:
-      - POSTGRES_DB=statsdb
+      - POSTGRES_DB=recommendationsdb
       - POSTGRES_USER=dbuser
       - POSTGRES_PASSWORD=12345
-    volumes:
-      - ./stats-service/stats-server/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
       timeout: 5s
@@ -178,48 +218,6 @@ services:
       timeout: 5s
       interval: 5s
       retries: 10
-
-  stats-server:
-    build:
-      context: ./stats-service/stats-server
-      dockerfile: Dockerfile
-    image: stats-server
-    container_name: stats-server
-    hostname: stats-server
-    restart: on-failure
-    expose:
-      - "8080"
-    networks:
-      - explore-network
-    depends_on:
-      discovery-server:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
-      stats-db:
-        condition: service_healthy
-    environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=stats-server
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_HOSTNAME=stats-server
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_CLIENT_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
-      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://stats-db:5432/statsdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
-      - SPRING_JPA_SHOW_SQL=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
 
   event-service:
     build:
@@ -388,3 +386,152 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  collector:
+    build:
+      context: ./stats/collector
+      dockerfile: Dockerfile
+    image: collector
+    container_name: collector
+    hostname: collector
+    restart: on-failure
+    ports:
+      - "0:8080"
+      - "0:9090"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy  # Добавляем зависимость от Kafka
+    environment:
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=0
+      - SPRING_APPLICATION_NAME=collector
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=collector
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  aggregator:
+    build:
+      context: ./stats/aggregator
+      dockerfile: Dockerfile
+    image: aggregator
+    container_name: aggregator
+    hostname: aggregator
+    restart: on-failure
+    ports:
+      - "0:8080"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=aggregator
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=aggregator
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  analyzer:
+    build:
+      context: ./stats/analyzer
+      dockerfile: Dockerfile
+    image: analyzer
+    container_name: analyzer
+    hostname: analyzer
+    restart: on-failure
+    ports:
+      - "0:8080"
+      - "0:9090"
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      recommendations-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=0
+      - SPRING_APPLICATION_NAME=analyzer
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
+      - EUREKA_INSTANCE_HOSTNAME=analyzer
+      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
+      - EUREKA_CLIENT_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
+      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://recommendations-db:5432/recommendationsdb
+      - SPRING_DATASOURCE_USERNAME=dbuser
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  tester:
+    image: eclipse-temurin:21-jre-jammy
+    container_name: tester
+    profiles: ["test"]
+    volumes:
+      - ./tester-0.0.1.jar:/app/tester.jar
+      - ./report:/app/reports
+    working_dir: /app
+    networks:
+      - explore-network
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      collector:
+        condition: service_healthy
+      aggregator:
+        condition: service_healthy
+      analyzer:
+        condition: service_healthy
+    command: >
+      java -jar tester.jar
+      --tester.execution.mode=ANALYZE
+      --tester.execution.output.file-path=/app/reports/report.txt
+      --grpc.client.collector.address=static://collector:32945
+      --grpc.client.analyzer.address=static://analyzer:32948

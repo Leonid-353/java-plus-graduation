@@ -12,9 +12,9 @@ public interface EventService {
                                         LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                         Boolean onlyAvailable, String sort, Integer from, Integer size);
 
-    EventFullDto getEvent(Long id);
+    EventFullDto getEvent(Long userId, Long eventId);
 
-    EventWithCommentsDto getEventWithComments(Long eventId);
+    EventWithCommentsDto getEventWithComments(Long userId, Long eventId);
 
     // Private methods
     Collection<EventShortDto> getUserEvents(Long userId, Integer from, Integer size);
@@ -37,4 +37,9 @@ public interface EventService {
     EventFullDto getEventByUserFeign(Long userId, Long eventId);
 
     void updateEventForRequests(Long eventId, Long confirmedRequests);
+
+    // Likes and Recommendations
+    void likeEvent(Long userId, Long eventId);
+
+    List<EventFullDto> getRecommendations(Long userId);
 }
