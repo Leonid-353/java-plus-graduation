@@ -1,3 +1,6 @@
+server:
+  port: 0
+
 grpc:
   server:
     port: 0
@@ -27,7 +30,7 @@ analyzer:
   kafka:
     consumer-actions:
       properties:
-        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+        bootstrap.servers: localhost:9092
         group.id: analyzer-actions-group
         key.deserializer: org.apache.kafka.common.serialization.LongDeserializer
         value.deserializer: ru.yandex.practicum.kafka.deserializer.UserActionDeserializer
@@ -37,7 +40,7 @@ analyzer:
         user-actions: stats.user-actions.v1
     consumer-similarities:
       properties:
-        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+        bootstrap.servers: localhost:9092
         group.id: analyzer-similarities-group
         key.deserializer: org.apache.kafka.common.serialization.LongDeserializer
         value.deserializer: ru.yandex.practicum.kafka.deserializer.EventSimilarityDeserializer

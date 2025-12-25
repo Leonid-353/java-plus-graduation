@@ -1,3 +1,6 @@
+server:
+  port: 0
+
 spring:
   application:
     name: aggregator
@@ -6,7 +9,7 @@ aggregator:
   kafka:
     producer:
       properties:
-        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+        bootstrap.servers: localhost:9092
         client.id: "stats.aggregator"
         key.serializer: org.apache.kafka.common.serialization.LongSerializer
         value.serializer: ru.yandex.practicum.kafka.serializer.GeneralAvroSerializer
@@ -14,7 +17,7 @@ aggregator:
         events-similarity: stats.events-similarity.v1
     consumer:
       properties:
-        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+        bootstrap.servers: localhost:9092
         group.id: aggregator-group
         key.deserializer: org.apache.kafka.common.serialization.LongDeserializer
         value.deserializer: ru.yandex.practicum.kafka.deserializer.UserActionDeserializer
