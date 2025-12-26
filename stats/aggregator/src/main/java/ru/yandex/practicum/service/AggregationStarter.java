@@ -9,7 +9,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.errors.WakeupException;
 import org.springframework.stereotype.Component;
-import ru.practicum.ewm.stats.avro.EventSimilarityAvro;
 import ru.practicum.ewm.stats.avro.UserActionAvro;
 import ru.yandex.practicum.config.KafkaConfigProducer;
 import ru.yandex.practicum.kafka.AggregatorEventSimilarityProducer;
@@ -17,7 +16,6 @@ import ru.yandex.practicum.kafka.AggregatorUserActionConsumer;
 import ru.yandex.practicum.service.constants.ActionWeights;
 
 import java.time.Duration;
-import java.util.List;
 
 @Slf4j
 @Component
@@ -51,17 +49,17 @@ public class AggregationStarter {
 
                 if (!records.isEmpty()) {
                     for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
-                        // processUserAction(record);
                         UserActionAvro actionAvro = (UserActionAvro) record.value();
                         service.updateSimilarity(actionAvro)
                                 .forEach(similarity -> {
                                     producer.send(
                                         KafkaConfigProducer.TopicType.EVENTS_SIMILARITY,
-                                        similarity.getEventA(),
+                                        similarity.getEventA() + "-" + similarity.getEventB(),
                                         similarity);
                                     log.info("Similarity send in Aggregator: {}", similarity);
                                 });
                     }
+                    producer.flush();
                     consumer.commitAsync();
                     log.debug("Смещения зафиксированы");
                 }
@@ -74,34 +72,6 @@ public class AggregationStarter {
             shutdown();
         }
     }
-
-//    private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
-//        UserActionAvro actionAvro = (UserActionAvro) record.value();
-//
-//        log.debug("Обработка: userId={}, eventId={}, action={}, offset={}",
-//                actionAvro.getUserId(), actionAvro.getEventId(),
-//                actionAvro.getActionType(), record.offset());
-//
-//        List<EventSimilarityAvro> updatedSimilarities = service.updateSimilarity(actionAvro);
-//
-//        if (!updatedSimilarities.isEmpty()) {
-//            sendSimilaritiesToKafka(updatedSimilarities);
-//            log.debug("Отправлено {} схожестей", updatedSimilarities.size());
-//        }
-//    }
-//
-//    private void sendSimilaritiesToKafka(Iterable<EventSimilarityAvro> similarities) {
-//        for (EventSimilarityAvro similarity : similarities) {
-//            try {
-//                long key = similarity.getEventA();
-//                producer.send(KafkaConfigProducer.TopicType.EVENTS_SIMILARITY, key, similarity);
-//            } catch (Exception ex) {
-//                log.error("Ошибка отправки схожести в Kafka: {}", similarity, ex);
-//                throw new RuntimeException("Не удалось отправить сообщение в Kafka", ex);
-//            }
-//        }
-//        producer.flush();
-//    }
 
     private void shutdown() {
         log.info("Завершение работы агрегатора...");

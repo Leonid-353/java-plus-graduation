@@ -42,7 +42,7 @@ analyzer:
       properties:
         bootstrap.servers: localhost:9092
         group.id: analyzer-similarities-group
-        key.deserializer: org.apache.kafka.common.serialization.LongDeserializer
+        key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
         value.deserializer: ru.yandex.practicum.kafka.deserializer.EventSimilarityDeserializer
         auto.offset.reset: latest
         enable.auto.commit: false

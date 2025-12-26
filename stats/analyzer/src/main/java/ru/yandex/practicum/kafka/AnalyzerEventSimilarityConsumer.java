@@ -20,7 +20,7 @@ import java.util.Collections;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AnalyzerEventSimilarityConsumer implements AutoCloseable {
     final KafkaConfigConsumer kafkaConfig;
-    KafkaConsumer<Long, SpecificRecordBase> consumer;
+    KafkaConsumer<String, SpecificRecordBase> consumer;
 
     @PostConstruct
     public void init() {
@@ -38,7 +38,7 @@ public class AnalyzerEventSimilarityConsumer implements AutoCloseable {
         log.info("Consumer создан для топика: {}", topic);
     }
 
-    public ConsumerRecords<Long, SpecificRecordBase> poll(Duration timeout) {
+    public ConsumerRecords<String, SpecificRecordBase> poll(Duration timeout) {
         return consumer.poll(timeout);
     }
 

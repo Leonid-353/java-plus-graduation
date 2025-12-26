@@ -19,7 +19,7 @@ import java.time.Duration;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AggregatorEventSimilarityProducer implements AutoCloseable {
     final KafkaConfigProducer kafkaConfig;
-    KafkaProducer<Long, SpecificRecordBase> producer;
+    KafkaProducer<String, SpecificRecordBase> producer;
 
     @PostConstruct
     public void init() {
@@ -34,7 +34,7 @@ public class AggregatorEventSimilarityProducer implements AutoCloseable {
         log.info("Producer создан для топика: {}", topic);
     }
 
-    public void send(KafkaConfigProducer.TopicType topicType, Long key, SpecificRecordBase message) {
+    public void send(KafkaConfigProducer.TopicType topicType, String key, SpecificRecordBase message) {
         String topicName = kafkaConfig.getProducer().getTypedTopics().get(topicType);
 
         if (topicName == null || topicName.isEmpty()) {
@@ -42,7 +42,6 @@ public class AggregatorEventSimilarityProducer implements AutoCloseable {
         }
 
         producer.send(new ProducerRecord<>(topicName, key, message));
-        producer.flush();
     }
 
     public void flush() {

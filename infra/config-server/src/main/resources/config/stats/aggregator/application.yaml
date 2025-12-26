@@ -11,7 +11,7 @@ aggregator:
       properties:
         bootstrap.servers: localhost:9092
         client.id: "stats.aggregator"
-        key.serializer: org.apache.kafka.common.serialization.LongSerializer
+        key.serializer: org.apache.kafka.common.serialization.StringSerializer
         value.serializer: ru.yandex.practicum.kafka.serializer.GeneralAvroSerializer
       topics:
         events-similarity: stats.events-similarity.v1

@@ -33,11 +33,11 @@ public class EventSimilarityProcessor {
             log.info("Начало обработки сообщений из Kafka...");
 
             while (true) {
-                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(POLL_TIMEOUT);
+                ConsumerRecords<String, SpecificRecordBase> records = consumer.poll(POLL_TIMEOUT);
                 log.debug("Получено {} сообщений", records.count());
 
                 if (!records.isEmpty()) {
-                    for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
+                    for (ConsumerRecord<String, SpecificRecordBase> record : records) {
                         EventSimilarityAvro avro = (EventSimilarityAvro) record.value();
                         handler.handle(avro);
                     }
