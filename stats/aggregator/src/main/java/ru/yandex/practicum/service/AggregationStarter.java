@@ -51,7 +51,16 @@ public class AggregationStarter {
 
                 if (!records.isEmpty()) {
                     for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
-                        processUserAction(record);
+                        // processUserAction(record);
+                        UserActionAvro actionAvro = (UserActionAvro) record.value();
+                        service.updateSimilarity(actionAvro)
+                                .forEach(similarity -> {
+                                    producer.send(
+                                        KafkaConfigProducer.TopicType.EVENTS_SIMILARITY,
+                                        similarity.getEventA(),
+                                        similarity);
+                                    log.info("Similarity send in Aggregator: {}", similarity);
+                                });
                     }
                     consumer.commitAsync();
                     log.debug("Смещения зафиксированы");
@@ -66,33 +75,33 @@ public class AggregationStarter {
         }
     }
 
-    private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
-        UserActionAvro actionAvro = (UserActionAvro) record.value();
-
-        log.debug("Обработка: userId={}, eventId={}, action={}, offset={}",
-                actionAvro.getUserId(), actionAvro.getEventId(),
-                actionAvro.getActionType(), record.offset());
-
-        List<EventSimilarityAvro> updatedSimilarities = service.updateSimilarity(actionAvro);
-
-        if (!updatedSimilarities.isEmpty()) {
-            sendSimilaritiesToKafka(updatedSimilarities);
-            log.debug("Отправлено {} схожестей", updatedSimilarities.size());
-        }
-    }
-
-    private void sendSimilaritiesToKafka(Iterable<EventSimilarityAvro> similarities) {
-        for (EventSimilarityAvro similarity : similarities) {
-            try {
-                long key = similarity.getEventA();
-                producer.send(KafkaConfigProducer.TopicType.EVENTS_SIMILARITY, key, similarity);
-            } catch (Exception ex) {
-                log.error("Ошибка отправки схожести в Kafka: {}", similarity, ex);
-                throw new RuntimeException("Не удалось отправить сообщение в Kafka", ex);
-            }
-        }
-        producer.flush();
-    }
+//    private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
+//        UserActionAvro actionAvro = (UserActionAvro) record.value();
+//
+//        log.debug("Обработка: userId={}, eventId={}, action={}, offset={}",
+//                actionAvro.getUserId(), actionAvro.getEventId(),
+//                actionAvro.getActionType(), record.offset());
+//
+//        List<EventSimilarityAvro> updatedSimilarities = service.updateSimilarity(actionAvro);
+//
+//        if (!updatedSimilarities.isEmpty()) {
+//            sendSimilaritiesToKafka(updatedSimilarities);
+//            log.debug("Отправлено {} схожестей", updatedSimilarities.size());
+//        }
+//    }
+//
+//    private void sendSimilaritiesToKafka(Iterable<EventSimilarityAvro> similarities) {
+//        for (EventSimilarityAvro similarity : similarities) {
+//            try {
+//                long key = similarity.getEventA();
+//                producer.send(KafkaConfigProducer.TopicType.EVENTS_SIMILARITY, key, similarity);
+//            } catch (Exception ex) {
+//                log.error("Ошибка отправки схожести в Kafka: {}", similarity, ex);
+//                throw new RuntimeException("Не удалось отправить сообщение в Kafka", ex);
+//            }
+//        }
+//        producer.flush();
+//    }
 
     private void shutdown() {
         log.info("Завершение работы агрегатора...");

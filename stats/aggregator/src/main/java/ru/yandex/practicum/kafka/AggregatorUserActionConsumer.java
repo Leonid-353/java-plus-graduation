@@ -1,7 +1,6 @@
 package ru.yandex.practicum.kafka;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,7 +18,7 @@ import java.util.Collections;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class AggregatorUserActionConsumer {
+public class AggregatorUserActionConsumer implements AutoCloseable {
     final KafkaConfigConsumer kafkaConfig;
     KafkaConsumer<Long, SpecificRecordBase> consumer;
 
@@ -38,36 +37,20 @@ public class AggregatorUserActionConsumer {
     }
 
     public ConsumerRecords<Long, SpecificRecordBase> poll(Duration timeout) {
-        if (consumer == null) {
-            throw new IllegalStateException("Consumer не инициализирован!");
-        }
         return consumer.poll(timeout);
     }
 
     public void commitAsync() {
-        if (consumer != null) {
-            consumer.commitAsync();
-        }
+        consumer.commitAsync();
     }
 
-    public void commitSync() {
-        if (consumer != null) {
-            consumer.commitSync();
-        }
-    }
-
-    @PreDestroy
+    @Override
     public void close() {
-        if (consumer != null) {
-            consumer.close();
-            log.info("Consumer закрыт");
-        }
+        consumer.close();
     }
 
     public void wakeup() {
         log.info("Прерывание AggregatorUserActionConsumer");
-        if (consumer != null) {
-            consumer.wakeup();
-        }
+        consumer.wakeup();
     }
 }
