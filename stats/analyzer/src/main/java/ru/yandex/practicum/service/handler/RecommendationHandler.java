@@ -88,7 +88,7 @@ public class RecommendationHandler {
     // Вспомогательные методы
     private Set<Long> getRecentUserEvents(Long userId, int limit) {
         PageRequest pageRequest =
-                PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "timestamp"));
+                PageRequest.of(0, limit * 2, Sort.by(Sort.Direction.DESC, "timestamp"));
 
         return userActionRepository.findRecentByUserId(userId, pageRequest).stream()
                 .map(UserAction::getEventId)
@@ -118,7 +118,7 @@ public class RecommendationHandler {
     private Double calculateRecommendationScore(Long candidateEventId, Set<Long> allUserEventIds) {
         List<EventSimilarity> similarities = eventSimilarityRepository.findTopByEventAOrEventB(
                 candidateEventId,
-                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "score"))
+                PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "score"))
         );
 
         List<EventSimilarity> relevantSimilarities = similarities.stream()

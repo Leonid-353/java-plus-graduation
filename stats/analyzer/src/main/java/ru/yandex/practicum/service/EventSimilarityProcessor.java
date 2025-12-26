@@ -20,7 +20,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class EventSimilarityProcessor {
-    static final Duration POLL_TIMEOUT = Duration.ofMillis(5000);
+    static final Duration POLL_TIMEOUT = Duration.ofMillis(500);
 
     final AnalyzerEventSimilarityConsumer consumer;
     final EventSimilarityHandler handler;

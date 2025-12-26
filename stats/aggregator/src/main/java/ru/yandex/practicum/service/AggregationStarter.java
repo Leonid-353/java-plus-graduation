@@ -47,7 +47,7 @@ public class AggregationStarter {
             log.info("Начало обработки сообщений из Kafka...");
 
             while (true) {
-                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(1000));
+                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(500));
 
                 int messageCount = records.count();
                 log.debug("Получено {} сообщений", messageCount);

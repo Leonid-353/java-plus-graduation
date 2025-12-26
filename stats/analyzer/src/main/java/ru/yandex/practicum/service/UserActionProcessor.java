@@ -20,7 +20,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserActionProcessor implements Runnable {
-    static final Duration POLL_TIMEOUT = Duration.ofMillis(5000);
+    static final Duration POLL_TIMEOUT = Duration.ofMillis(500);
 
     final AnalyzerUserActionConsumer consumer;
     final UserActionHandler handler;
