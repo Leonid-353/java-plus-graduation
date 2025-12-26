@@ -30,52 +30,43 @@ public class UserActionProcessor implements Runnable {
     public void run() {
         log.info("=== Запуск обработчика действий пользователей ===");
 
+        registerShutdownHook();
+
         try {
-            registerShutdownHook();
             log.info("Начало обработки сообщений из Kafka...");
 
             while (true) {
-                try {
-                    ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(POLL_TIMEOUT);
+                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(POLL_TIMEOUT);
 
-                    int messageCount = records.count();
-                    if (messageCount > 0) {
-                        log.debug("Получено {} сообщений", messageCount);
+                int messageCount = records.count();
+                if (messageCount > 0) {
+                    log.debug("Получено {} сообщений", messageCount);
 
-                        for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
-                            processUserAction(record);
-                        }
-
-                        consumer.commitAsync();
-                        log.debug("Смещения зафиксированы");
+                    for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
+                        processUserAction(record);
                     }
-                } catch (WakeupException ex) {
-                    log.info("Получен WakeupException - завершение обработки");
-                    break;
-                } catch (Exception ex) {
-                    log.error("Ошибка в цикле обработки", ex);
+
+                    consumer.commitAsync();
+                    log.debug("Смещения зафиксированы");
                 }
             }
+        } catch (WakeupException ignored) {
+            log.info("Получен WakeupException - завершение обработки");
+        } catch (Exception ex) {
+            log.error("Ошибка в цикле обработки", ex);
         } finally {
             shutdown();
         }
     }
 
     private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
-        try {
-            UserActionAvro avro = (UserActionAvro) record.value();
+        UserActionAvro avro = (UserActionAvro) record.value();
 
-            log.debug("Обработка: userId={}, eventId={}, actionType={}, offset={}",
-                    avro.getUserId(), avro.getEventId(),
-                    avro.getActionType(), record.offset());
+        log.debug("Обработка: userId={}, eventId={}, actionType={}, offset={}",
+                avro.getUserId(), avro.getEventId(),
+                avro.getActionType(), record.offset());
 
-            handler.handle(avro);
-
-        } catch (ClassCastException ex) {
-            log.error("Ошибка преобразования типа сообщения: {}", record.value().getClass(), ex);
-        } catch (Exception ex) {
-            log.error("Ошибка обработки сообщения offset={}", record.offset(), ex);
-        }
+        handler.handle(avro);
     }
 
     private void shutdown() {

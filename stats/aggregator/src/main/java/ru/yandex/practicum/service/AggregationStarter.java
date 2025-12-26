@@ -47,50 +47,41 @@ public class AggregationStarter {
             log.info("Начало обработки сообщений из Kafka...");
 
             while (true) {
-                try {
-                    ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(5000));
+                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(1000));
 
-                    int messageCount = records.count();
-                    if (messageCount > 0) {
-                        log.debug("Получено {} сообщений", messageCount);
+                int messageCount = records.count();
+                log.debug("Получено {} сообщений", messageCount);
 
-                        for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
-                            processUserAction(record);
-                        }
-
-                        consumer.commitAsync();
-                        log.debug("Смещения зафиксированы");
+                if (messageCount > 0) {
+                    for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
+                        processUserAction(record);
                     }
-                } catch (WakeupException ex) {
-                    log.info("Получен WakeupException - завершение работы");
-                    break;
-                } catch (Exception ex) {
-                    log.error("Ошибка в цикле обработки", ex);
+
+                    consumer.commitAsync();
+                    log.debug("Смещения зафиксированы");
                 }
             }
+        } catch (WakeupException ignored) {
+            log.info("Получен WakeupException - завершение работы");
+        } catch (Exception ex) {
+            log.error("Ошибка в цикле обработки", ex);
         } finally {
             shutdown();
         }
     }
 
     private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
-        try {
-            UserActionAvro actionAvro = (UserActionAvro) record.value();
+        UserActionAvro actionAvro = (UserActionAvro) record.value();
 
-            log.debug("Обработка: userId={}, eventId={}, action={}, offset={}",
-                    actionAvro.getUserId(), actionAvro.getEventId(),
-                    actionAvro.getActionType(), record.offset());
+        log.debug("Обработка: userId={}, eventId={}, action={}, offset={}",
+                actionAvro.getUserId(), actionAvro.getEventId(),
+                actionAvro.getActionType(), record.offset());
 
-            List<EventSimilarityAvro> updatedSimilarities = service.updateSimilarity(actionAvro);
+        List<EventSimilarityAvro> updatedSimilarities = service.updateSimilarity(actionAvro);
 
-            if (!updatedSimilarities.isEmpty()) {
-                sendSimilaritiesToKafka(updatedSimilarities);
-                log.debug("Отправлено {} схожестей", updatedSimilarities.size());
-            }
-        } catch (ClassCastException ex) {
-            log.error("Ошибка преобразования типа сообщения: {}", record.value().getClass(), ex);
-        } catch (Exception ex) {
-            log.error("Ошибка обработки сообщения offset={}", record.offset(), ex);
+        if (!updatedSimilarities.isEmpty()) {
+            sendSimilaritiesToKafka(updatedSimilarities);
+            log.debug("Отправлено {} схожестей", updatedSimilarities.size());
         }
     }
 
@@ -98,10 +89,10 @@ public class AggregationStarter {
         for (EventSimilarityAvro similarity : similarities) {
             try {
                 long key = similarity.getEventA();
-
                 producer.send(KafkaConfigProducer.TopicType.EVENTS_SIMILARITY, key, similarity);
             } catch (Exception ex) {
                 log.error("Ошибка отправки схожести в Kafka: {}", similarity, ex);
+                throw new RuntimeException("Не удалось отправить сообщение в Kafka", ex);
             }
         }
         producer.flush();
