@@ -9,15 +9,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.errors.WakeupException;
 import org.springframework.stereotype.Component;
-import ru.practicum.ewm.stats.avro.EventSimilarityAvro;
 import ru.practicum.ewm.stats.avro.UserActionAvro;
-import ru.yandex.practicum.config.KafkaConfigProducer;
 import ru.yandex.practicum.kafka.AggregatorEventSimilarityProducer;
 import ru.yandex.practicum.kafka.AggregatorUserActionConsumer;
 import ru.yandex.practicum.service.constants.ActionWeights;
 
 import java.time.Duration;
-import java.util.List;
 
 @Slf4j
 @Component
@@ -38,25 +35,22 @@ public class AggregationStarter {
         log.info("Используемые веса: VIEW={}, REGISTER={}, LIKE={}",
                 ActionWeights.VIEW, ActionWeights.REGISTER, ActionWeights.LIKE);
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Получен сигнал завершения работы...");
-            consumer.wakeup();
-        }));
-
         try {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                log.info("Получен сигнал завершения работы...");
+                consumer.wakeup();
+            }));
             log.info("Начало обработки сообщений из Kafka...");
 
             while (true) {
-                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(500));
+                ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(Duration.ofMillis(1000));
+                log.debug("Получено {} сообщений", records.count());
 
-                int messageCount = records.count();
-                log.debug("Получено {} сообщений", messageCount);
-
-                if (messageCount > 0) {
+                if (!records.isEmpty()) {
                     for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
-                        processUserAction(record);
+                        UserActionAvro avro = (UserActionAvro) record.value();
+                        service.updateSimilarity(avro);
                     }
-
                     consumer.commitAsync();
                     log.debug("Смещения зафиксированы");
                 }
@@ -70,34 +64,6 @@ public class AggregationStarter {
         }
     }
 
-    private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
-        UserActionAvro actionAvro = (UserActionAvro) record.value();
-
-        log.debug("Обработка: userId={}, eventId={}, action={}, offset={}",
-                actionAvro.getUserId(), actionAvro.getEventId(),
-                actionAvro.getActionType(), record.offset());
-
-        List<EventSimilarityAvro> updatedSimilarities = service.updateSimilarity(actionAvro);
-
-        if (!updatedSimilarities.isEmpty()) {
-            sendSimilaritiesToKafka(updatedSimilarities);
-            log.debug("Отправлено {} схожестей", updatedSimilarities.size());
-        }
-    }
-
-    private void sendSimilaritiesToKafka(Iterable<EventSimilarityAvro> similarities) {
-        for (EventSimilarityAvro similarity : similarities) {
-            try {
-                long key = similarity.getEventA();
-                producer.send(KafkaConfigProducer.TopicType.EVENTS_SIMILARITY, key, similarity);
-            } catch (Exception ex) {
-                log.error("Ошибка отправки схожести в Kafka: {}", similarity, ex);
-                throw new RuntimeException("Не удалось отправить сообщение в Kafka", ex);
-            }
-        }
-        producer.flush();
-    }
-
     private void shutdown() {
         log.info("Завершение работы агрегатора...");
 
@@ -106,19 +72,15 @@ public class AggregationStarter {
             producer.flush();
 
             log.info("Фиксация смещений...");
-            consumer.commitSync();
+            consumer.commitAsync();
         } catch (Exception ex) {
             log.error("Ошибка при завершении работы", ex);
         } finally {
-            try {
-                log.info("Закрытие consumer...");
-                consumer.close();
+            log.info("Закрытие consumer...");
+            consumer.close();
 
-                log.info("Закрытие producer...");
-                producer.close();
-            } catch (Exception ex) {
-                log.error("Ошибка при закрытии ресурсов", ex);
-            }
+            log.info("Закрытие producer...");
+            producer.close();
         }
 
         log.info("Агрегатор остановлен");

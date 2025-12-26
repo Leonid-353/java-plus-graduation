@@ -20,7 +20,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserActionProcessor implements Runnable {
-    static final Duration POLL_TIMEOUT = Duration.ofMillis(500);
+    static final Duration POLL_TIMEOUT = Duration.ofMillis(5000);
 
     final AnalyzerUserActionConsumer consumer;
     final UserActionHandler handler;
@@ -30,22 +30,19 @@ public class UserActionProcessor implements Runnable {
     public void run() {
         log.info("=== Запуск обработчика действий пользователей ===");
 
-        registerShutdownHook();
-
         try {
+            registerShutdownHook();
             log.info("Начало обработки сообщений из Kafka...");
 
             while (true) {
                 ConsumerRecords<Long, SpecificRecordBase> records = consumer.poll(POLL_TIMEOUT);
+                log.debug("Получено {} сообщений", records.count());
 
-                int messageCount = records.count();
-                if (messageCount > 0) {
-                    log.debug("Получено {} сообщений", messageCount);
-
+                if (!records.isEmpty()) {
                     for (ConsumerRecord<Long, SpecificRecordBase> record : records) {
-                        processUserAction(record);
+                        UserActionAvro avro = (UserActionAvro) record.value();
+                        handler.handle(avro);
                     }
-
                     consumer.commitAsync();
                     log.debug("Смещения зафиксированы");
                 }
@@ -59,31 +56,17 @@ public class UserActionProcessor implements Runnable {
         }
     }
 
-    private void processUserAction(ConsumerRecord<Long, SpecificRecordBase> record) {
-        UserActionAvro avro = (UserActionAvro) record.value();
-
-        log.debug("Обработка: userId={}, eventId={}, actionType={}, offset={}",
-                avro.getUserId(), avro.getEventId(),
-                avro.getActionType(), record.offset());
-
-        handler.handle(avro);
-    }
-
     private void shutdown() {
         log.info("Завершение работы обработчика...");
 
         try {
             log.info("Фиксация оставшихся смещений...");
-            consumer.commitSync();
+            consumer.commitAsync();
         } catch (Exception ex) {
             log.error("Ошибка при фиксации смещений", ex);
         } finally {
-            try {
-                log.info("Закрытие AnalyzerUserActionConsumer...");
-                consumer.close();
-            } catch (Exception ex) {
-                log.error("Ошибка при закрытии AnalyzerUserActionConsumer", ex);
-            }
+            log.info("Закрытие AnalyzerUserActionConsumer...");
+            consumer.close();
         }
 
         log.info("Обработчик остановлен");
