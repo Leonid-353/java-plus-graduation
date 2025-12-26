@@ -1,7 +1,6 @@
 package ru.yandex.practicum.service;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -18,7 +17,7 @@ import java.time.Duration;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CollectorUserActionProducer {
+public class CollectorUserActionProducer implements AutoCloseable {
     final KafkaConfig kafkaConfig;
     KafkaProducer<Long, SpecificRecordBase> producer;
 
@@ -46,16 +45,10 @@ public class CollectorUserActionProducer {
         producer.flush();
     }
 
-    public void flush() {
-        producer.flush();
-    }
-
-    @PreDestroy
+    @Override
     public void close() {
-        if (producer != null) {
-            producer.flush();
-            producer.close(Duration.ofSeconds(15));
-            log.info("Producer закрыт");
-        }
+        producer.flush();
+        producer.close(Duration.ofSeconds(5));
+        log.info("Producer закрыт");
     }
 }

@@ -1,7 +1,6 @@
 package ru.yandex.practicum.kafka;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -18,7 +17,7 @@ import java.time.Duration;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class AggregatorEventSimilarityProducer {
+public class AggregatorEventSimilarityProducer implements AutoCloseable {
     final KafkaConfigProducer kafkaConfig;
     KafkaProducer<Long, SpecificRecordBase> producer;
 
@@ -50,12 +49,10 @@ public class AggregatorEventSimilarityProducer {
         producer.flush();
     }
 
-    @PreDestroy
+    @Override
     public void close() {
-        if (producer != null) {
-            producer.flush();
-            producer.close(Duration.ofSeconds(15));
-            log.info("Producer закрыт");
-        }
+        producer.flush();
+        producer.close(Duration.ofSeconds(5));
+        log.info("Producer закрыт");
     }
 }
