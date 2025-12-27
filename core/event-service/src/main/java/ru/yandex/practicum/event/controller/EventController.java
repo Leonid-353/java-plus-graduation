@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+import ru.yandex.practicum.constants.HttpHeaders;
 import ru.yandex.practicum.dto.event.EventFullDto;
 import ru.yandex.practicum.dto.event.EventShortDto;
 import ru.yandex.practicum.dto.event.EventWithCommentsDto;
@@ -42,7 +43,7 @@ public class EventController {
     }
 
     @GetMapping("/{eventId}")
-    public EventFullDto getEvent(@RequestHeader("X-EWM-USER-ID") Long userId,
+    public EventFullDto getEvent(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId,
                                  @PathVariable Long eventId) {
         log.info("Получен запрос GET /events/{}", eventId);
 
@@ -50,20 +51,20 @@ public class EventController {
     }
 
     @GetMapping("/comments/{eventId}")
-    public EventWithCommentsDto getEventWithComments(@RequestHeader("X-EWM-USER-ID") Long userId,
+    public EventWithCommentsDto getEventWithComments(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId,
                                                      @PathVariable Long eventId) {
         return eventService.getEventWithComments(userId, eventId);
     }
 
     @PutMapping("/{eventId}/like")
-    public void likeEvent(@RequestHeader("X-EWM-USER-ID") Long userId,
+    public void likeEvent(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId,
                           @PathVariable Long eventId) {
         log.info("Получен запрос оценки 'like' события ID: {} пользователем ID: {}", eventId, userId);
         eventService.likeEvent(userId, eventId);
     }
 
     @GetMapping("/recommendations")
-    public List<EventFullDto> getRecommendations(@RequestHeader("X-EWM-USER-ID") Long userId) {
+    public List<EventFullDto> getRecommendations(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId) {
         log.info("Получен запрос рекомендаций для пользователя с ID: {}", userId);
         return eventService.getRecommendations(userId);
     }

@@ -153,7 +153,9 @@ public class RequestServiceImpl implements RequestService {
                 .created(LocalDateTime.now())
                 .build();
 
-        return requestMapper.toParticipationRequestDto(requestRepository.save(request));
+        Request savedRequest = requestRepository.save(request);
+        requestRepository.flush();
+        return requestMapper.toParticipationRequestDto(savedRequest);
     }
 
     // Cancel request
@@ -161,7 +163,7 @@ public class RequestServiceImpl implements RequestService {
     private ParticipationRequestDto cancelRequestInTransaction(Request request) {
         request.setStatus(RequestStatus.CANCELED);
         request = requestRepository.save(request);
-
+        requestRepository.flush();
         return requestMapper.toParticipationRequestDto(request);
     }
 
@@ -215,6 +217,9 @@ public class RequestServiceImpl implements RequestService {
 
         // Сохранение изменений
         requestRepository.saveAll(requests);
+        requestRepository.flush();
+        // Передаем изменения в основной метод для передачи в event-service
+        event.setConfirmedRequests(currentConfirmed);
 
         // Если при подтверждении заявок лимит исчерпан, отклоняем все остальные заявки в ожидании
         if (currentConfirmed >= event.getParticipantLimit()) {
@@ -222,10 +227,9 @@ public class RequestServiceImpl implements RequestService {
                     event.getId(), RequestStatus.PENDING);
             pendingRequests.forEach(r -> r.setStatus(RequestStatus.REJECTED));
             requestRepository.saveAll(pendingRequests);
+            requestRepository.flush();
             rejectedRequests.addAll(pendingRequests);
         }
-
-        event.setConfirmedRequests(currentConfirmed);
 
         return EventRequestStatusUpdateResult.builder()
                 .confirmedRequests(requestMapper.toParticipationRequestDtoList(confirmedRequests))

@@ -47,6 +47,7 @@ public class CommentServiceImpl implements CommentService {
         commentRepository.findById(commentId)
                 .orElseThrow(() -> new NotFoundException("Comment not found: " + commentId));
         commentRepository.deleteById(commentId);
+        commentRepository.flush();
     }
 
     @Override
@@ -99,8 +100,9 @@ public class CommentServiceImpl implements CommentService {
     @Transactional
     private CommentDto createCommentInTransaction(CommentCreateDto commentCreateDto, Long userId, Long eventId) {
         Comment comment = commentMapper.toEntity(commentCreateDto);
-
-        return commentMapper.toDto(commentRepository.save(comment));
+        Comment savedComment = commentRepository.save(comment);
+        commentRepository.flush();
+        return commentMapper.toDto(savedComment);
     }
 
     // Get all comments by user id
@@ -120,7 +122,9 @@ public class CommentServiceImpl implements CommentService {
 
         checkUserIsAuthor(comment, userId);
         comment.setText(commentUpdateDto.getText());
-        return commentMapper.toDto(commentRepository.save(comment));
+        Comment savedComment = commentRepository.save(comment);
+        commentRepository.flush();
+        return commentMapper.toDto(savedComment);
     }
 
     // Delete comment
@@ -136,6 +140,7 @@ public class CommentServiceImpl implements CommentService {
         }
 
         commentRepository.deleteById(commentId);
+        commentRepository.flush();
     }
 
     // Get comments by event id

@@ -210,11 +210,13 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public void updateEventForRequests(Long eventId, Long confirmedRequests) {
         Event event = findEventById(eventId);
 
         event.setConfirmedRequests(confirmedRequests);
         eventRepository.save(event);
+        eventRepository.flush();
     }
 
     // Likes and Recommendations
@@ -373,15 +375,19 @@ public class EventServiceImpl implements EventService {
         Location location = locationRepository.findByLatAndLon(
                         newEventDto.getLocation().getLat(),
                         newEventDto.getLocation().getLon())
-                .orElseGet(() -> locationRepository.save(
-                        eventMapper.toLocation(newEventDto.getLocation())
-                ));
+                .orElseGet(() -> {
+                    Location newLocation = locationRepository.save(
+                            eventMapper.toLocation(newEventDto.getLocation()));
+                    locationRepository.flush();
+                    return newLocation;
+                });
 
         Event event = eventMapper.toEvent(newEventDto);
         event.setInitiatorId(initiatorId);
         event.setCategory(category);
         event.setLocation(location);
         event = eventRepository.save(event);
+        eventRepository.flush();
 
         return eventMapper.toEventFullDto(event);
     }
@@ -418,7 +424,9 @@ public class EventServiceImpl implements EventService {
             }
         }
 
-        return eventRepository.save(event);
+        event = eventRepository.save(event);
+        eventRepository.flush();
+        return event;
     }
 
     // Get events admin
@@ -474,7 +482,9 @@ public class EventServiceImpl implements EventService {
             }
         }
 
-        return eventRepository.save(event);
+        event = eventRepository.save(event);
+        eventRepository.flush();
+        return event;
     }
 
     // Get recommendations
@@ -566,9 +576,13 @@ public class EventServiceImpl implements EventService {
             Location location = locationRepository.findByLatAndLon(
                             updateRequest.getLocation().getLat(),
                             updateRequest.getLocation().getLon())
-                    .orElseGet(() -> locationRepository.save(
-                            eventMapper.toLocation(updateRequest.getLocation())
-                    ));
+                    .orElseGet(() -> {
+                        Location newLocation = locationRepository.save(
+                                eventMapper.toLocation(updateRequest.getLocation())
+                        );
+                        locationRepository.flush();
+                        return newLocation;
+                    });
             event.setLocation(location);
         }
 
@@ -615,9 +629,13 @@ public class EventServiceImpl implements EventService {
             Location location = locationRepository.findByLatAndLon(
                             updateRequest.getLocation().getLat(),
                             updateRequest.getLocation().getLon())
-                    .orElseGet(() -> locationRepository.save(
-                            eventMapper.toLocation(updateRequest.getLocation())
-                    ));
+                    .orElseGet(() -> {
+                        Location newLocation = locationRepository.save(
+                                eventMapper.toLocation(updateRequest.getLocation())
+                        );
+                        locationRepository.flush();
+                        return newLocation;
+                    });
             event.setLocation(location);
         }
 
