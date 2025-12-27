@@ -1,3 +1,10 @@
+grpc:
+  client:
+    collector:
+      address: static://collector:9090
+    analyzer:
+      address: static://analyzer:9090
+
 server:
   port: 0
 

@@ -1,17 +1,16 @@
 package ru.yandex.practicum.event.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+import ru.yandex.practicum.constants.HttpHeaders;
 import ru.yandex.practicum.dto.event.EventFullDto;
 import ru.yandex.practicum.dto.event.EventShortDto;
 import ru.yandex.practicum.dto.event.EventWithCommentsDto;
 import ru.yandex.practicum.event.service.EventService;
-import ru.yandex.practicum.event.service.EventServiceImpl;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -23,7 +22,6 @@ import java.util.List;
 @Slf4j
 public class EventController {
     private final EventService eventService;
-    private final EventServiceImpl eventServiceImpl;
 
     @GetMapping
     public Collection<EventShortDto> getEvents(
@@ -35,28 +33,39 @@ public class EventController {
             @RequestParam(defaultValue = "false") Boolean onlyAvailable,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") @PositiveOrZero Integer from,
-            @RequestParam(defaultValue = "10") @Positive Integer size,
-            HttpServletRequest request) {
+            @RequestParam(defaultValue = "10") @Positive Integer size) {
 
         log.info("Получен запрос GET /events с параметрами: text={}, categories={}, paid={}, rangeStart={}, " +
                         "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
                 text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 
-        // Сохраняем информацию о просмотре для статистики
-        eventServiceImpl.addHit(request);
         return eventService.getEvents(text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
     }
 
-    @GetMapping("/{id}")
-    public EventFullDto getEvent(@PathVariable Long id, HttpServletRequest request) {
-        log.info("Получен запрос GET /events/{}", id);
-        // Сохраняем информацию о просмотре для статистики
-        eventServiceImpl.addHit(request);
-        return eventService.getEvent(id);
+    @GetMapping("/{eventId}")
+    public EventFullDto getEvent(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId,
+                                 @PathVariable Long eventId) {
+        log.info("Получен запрос GET /events/{}", eventId);
+
+        return eventService.getEvent(userId, eventId);
     }
 
     @GetMapping("/comments/{eventId}")
-    public EventWithCommentsDto getEventWithComments(@PathVariable Long eventId) {
-        return eventService.getEventWithComments(eventId);
+    public EventWithCommentsDto getEventWithComments(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId,
+                                                     @PathVariable Long eventId) {
+        return eventService.getEventWithComments(userId, eventId);
+    }
+
+    @PutMapping("/{eventId}/like")
+    public void likeEvent(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId,
+                          @PathVariable Long eventId) {
+        log.info("Получен запрос оценки 'like' события ID: {} пользователем ID: {}", eventId, userId);
+        eventService.likeEvent(userId, eventId);
+    }
+
+    @GetMapping("/recommendations")
+    public List<EventFullDto> getRecommendations(@RequestHeader(HttpHeaders.USER_ID_HEADER) Long userId) {
+        log.info("Получен запрос рекомендаций для пользователя с ID: {}", userId);
+        return eventService.getRecommendations(userId);
     }
 }

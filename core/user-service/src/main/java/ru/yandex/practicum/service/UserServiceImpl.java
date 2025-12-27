@@ -32,6 +32,7 @@ public class UserServiceImpl implements UserService {
         log.info("Creating user with name {}, email {}", userDto.getName(), userDto.getEmail());
         User user = userMapper.toUser(userDto);
         user = userRepository.save(user);
+        userRepository.flush();
         return userMapper.toDto(user);
     }
 
@@ -88,6 +89,7 @@ public class UserServiceImpl implements UserService {
                     log.error("User with id={} not found", userId);
                     return new NotFoundException(String.format("User with id=%d was not found", userId));
                 }));
+        userRepository.flush();
         log.info("User with id={} successfully deleted", userId);
     }
 }
