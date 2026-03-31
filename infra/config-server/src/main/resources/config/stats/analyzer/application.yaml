@@ -30,7 +30,7 @@ analyzer:
   kafka:
     consumer-actions:
       properties:
-        bootstrap.servers: localhost:9092
+        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
         group.id: analyzer-actions-group
         key.deserializer: org.apache.kafka.common.serialization.LongDeserializer
         value.deserializer: ru.yandex.practicum.kafka.deserializer.UserActionDeserializer
@@ -40,7 +40,7 @@ analyzer:
         user-actions: stats.user-actions.v1
     consumer-similarities:
       properties:
-        bootstrap.servers: localhost:9092
+        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
         group.id: analyzer-similarities-group
         key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
         value.deserializer: ru.yandex.practicum.kafka.deserializer.EventSimilarityDeserializer

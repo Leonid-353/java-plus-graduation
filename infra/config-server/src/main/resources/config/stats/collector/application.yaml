@@ -13,7 +13,7 @@ collector:
   kafka:
     producer:
       properties:
-        bootstrap.servers: localhost:9092
+        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
         client.id: "stats.collector"
         key.serializer: org.apache.kafka.common.serialization.LongSerializer
         value.serializer: ru.yandex.practicum.kafka.serializer.GeneralAvroSerializer

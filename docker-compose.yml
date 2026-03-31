@@ -1,13 +1,161 @@
-version: '3.8'
+networks:
+  ewm-network:
+    driver: bridge
 
 services:
+  # ========== INFRASTRUCTURE ==========
+
+  discovery-server:
+    build: ./infra/discovery-server
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    environment:
+      SERVER_PORT: 8761
+      EUREKA_INSTANCE_HOSTNAME: discovery-server
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  config-server:
+    build: ./infra/config-server
+    container_name: config-server
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: config-server
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_CLOUD_CONFIG_SERVER_GIT_URI: file:/config
+    volumes:
+      - ./infra/config-server/src/main/resources:/application.yaml
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://discovery-server:8761/eureka/apps/config-server"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  gateway-server:
+    build: ./infra/gateway-server
+    container_name: gateway-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      EUREKA_INSTANCE_HOSTNAME: gateway-server
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    networks:
+      - ewm-network
+
+  # ========== DATABASES ==========
+
+  event-db:
+    image: postgres:16.1
+    container_name: event-db
+    ports:
+      - "6432:5432"
+    environment:
+      POSTGRES_DB: eventdb
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: 12345
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbuser -d eventdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-db:
+    image: postgres:16.1
+    container_name: user-db
+    ports:
+      - "6433:5432"
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: 12345
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbuser -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  request-db:
+    image: postgres:16.1
+    container_name: request-db
+    ports:
+      - "6435:5432"
+    environment:
+      POSTGRES_DB: requestdb
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: 12345
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbuser -d requestdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  comment-db:
+    image: postgres:16.1
+    container_name: comment-db
+    ports:
+      - "6434:5432"
+    environment:
+      POSTGRES_DB: commentdb
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: 12345
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbuser -d commentdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  recommendations-db:
+    image: postgres:16.1
+    container_name: recommendations-db
+    ports:
+      - "7432:5432"
+    environment:
+      POSTGRES_DB: recommendationsdb
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: 12345
+    networks:
+      - ewm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbuser -d recommendationsdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== KAFKA ==========
+
   kafka:
     image: confluentinc/confluent-local:7.4.3
     hostname: kafka
     container_name: kafka
     ports:
-      - "9092:9092" # for client connections
-      - "9101:9101" # JMX
+      - "9092:9092"
+      - "9101:9101"
     restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
@@ -18,8 +166,10 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
       KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
       CLUSTER_ID: 'K0EA9p0yEe6MkAAAAkKsEg'
+    networks:
+      - ewm-network
     healthcheck:
-      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -29,7 +179,8 @@ services:
     image: confluentinc/confluent-local:7.4.3
     container_name: kafka-init-topics
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     command: "bash -c \
                 'kafka-topics --create --topic stats.user-actions.v1 \
                              --partitions 1 --replication-factor 1 --if-not-exists \
@@ -37,319 +188,171 @@ services:
                 kafka-topics --create --topic stats.events-similarity.v1 \
                              --partitions 1 --replication-factor 1 --if-not-exists \
                              --bootstrap-server kafka:29092'"
+    networks:
+      - ewm-network
     init: true
 
-  discovery-server:
-    build: infra/discovery-server
-    image: discovery-server
-    container_name: discovery-server
-    hostname: discovery-server
-    restart: on-failure
-    ports:
-      - "8761:8761"
-    environment:
-      - SERVER_PORT=8761
-      - EUREKA_INSTANCE_HOSTNAME=discovery-server
-      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
-      - EUREKA_CLIENT_FETCH_REGISTRY=false
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8761/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  config-server:
-    build: infra/config-server
-    image: config-server
-    container_name: config-server
-    hostname: config-server
-    restart: on-failure
-    ports:
-      - "0:8080"
-    depends_on:
-      discovery-server:
-        condition: service_healthy
-    environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=config-server
-      - EUREKA_INSTANCE_HOSTNAME=config-server
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_INSTANCE_NON_SECURE_PORT_ENABLED=true
-      - EUREKA_CLIENT_ENABLED=true
-      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
-      - EUREKA_CLIENT_FETCH_REGISTRY=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  gateway-server:
-    build: infra/gateway-server
-    image: gateway-server
-    container_name: gateway-server
-    restart: on-failure
-    ports:
-      - "8080:8080"
-    depends_on:
-      discovery-server:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
-    environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=gateway-server
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_HOSTNAME=gateway-server
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_CLIENT_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
-      - SPRING_CLOUD_CONFIG_FAIL_FAST=true
-      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true
-      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_LOWER_CASE_SERVICE_ID=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  recommendations-db:
-    image: postgres:16.1
-    container_name: recommendations-db
-    ports:
-      - "7432:5432"
-    environment:
-      - POSTGRES_DB=recommendationsdb
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=12345
-    healthcheck:
-      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
-      timeout: 5s
-      interval: 5s
-      retries: 10
-
-  event-db:
-    image: postgres:16.1
-    container_name: event-db
-    ports:
-      - "6432:5432"
-    environment:
-      - POSTGRES_DB=eventdb
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=12345
-    healthcheck:
-      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
-      timeout: 5s
-      interval: 5s
-      retries: 10
-
-  user-db:
-    image: postgres:16.1
-    container_name: user-db
-    ports:
-      - "6433:5432"
-    environment:
-      - POSTGRES_DB=userdb
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=12345
-    healthcheck:
-      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
-      timeout: 5s
-      interval: 5s
-      retries: 10
-
-  comment-db:
-    image: postgres:16.1
-    container_name: comment-db
-    ports:
-      - "6434:5432"
-    environment:
-      - POSTGRES_DB=commentdb
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=12345
-    healthcheck:
-      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
-      timeout: 5s
-      interval: 5s
-      retries: 10
-
-  request-db:
-    image: postgres:16.1
-    container_name: request-db
-    ports:
-      - "6435:5432"
-    environment:
-      - POSTGRES_DB=requestdb
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=12345
-    healthcheck:
-      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
-      timeout: 5s
-      interval: 5s
-      retries: 10
+  # ========== CORE SERVICES ==========
 
   event-service:
-    build:
-      context: ./core/event-service
-      dockerfile: Dockerfile
-    image: event-service
+    build: ./core/event-service
     container_name: event-service
-    hostname: event-service
-    restart: on-failure
-    ports:
-      - "0:8080"
     depends_on:
-      discovery-server:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
       event-db:
         condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
     environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=event-service
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_HOSTNAME=event-service
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_CLIENT_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
-      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://event-db:5432/eventdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
-      - SPRING_JPA_SHOW_SQL=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
+      SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: event-service
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://event-db:5432/eventdb
+      SPRING_DATASOURCE_USERNAME: dbuser
+      SPRING_DATASOURCE_PASSWORD: 12345
+    networks:
+      - ewm-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
 
   user-service:
-    build:
-      context: ./core/user-service
-      dockerfile: Dockerfile
-    image: user-service
+    build: ./core/user-service
     container_name: user-service
-    hostname: user-service
-    restart: on-failure
-    ports:
-      - "0:8080"
     depends_on:
-      discovery-server:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
       user-db:
         condition: service_healthy
-    environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=user-service
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_HOSTNAME=user-service
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_CLIENT_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
-      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://user-db:5432/userdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
-      - SPRING_JPA_SHOW_SQL=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
-
-  comment-service:
-    build:
-      context: ./core/comment-service
-      dockerfile: Dockerfile
-    image: comment-service
-    container_name: comment-service
-    hostname: comment-service
-    restart: on-failure
-    ports:
-      - "0:8080"
-    depends_on:
       discovery-server:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      comment-db:
-        condition: service_healthy
     environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=comment-service
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_HOSTNAME=comment-service
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_CLIENT_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
-      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://comment-db:5432/commentdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
-      - SPRING_JPA_SHOW_SQL=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
+      SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: user-service
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: dbuser
+      SPRING_DATASOURCE_PASSWORD: 12345
+    networks:
+      - ewm-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
 
   request-service:
-    build:
-      context: ./core/request-service
-      dockerfile: Dockerfile
-    image: request-service
+    build: ./core/request-service
     container_name: request-service
-    hostname: request-service
-    restart: on-failure
-    ports:
-      - "0:8080"
     depends_on:
+      request-db:
+        condition: service_healthy
       discovery-server:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      request-db:
+    environment:
+      SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: request-service
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://request-db:5432/requestdb
+      SPRING_DATASOURCE_USERNAME: dbuser
+      SPRING_DATASOURCE_PASSWORD: 12345
+    networks:
+      - ewm-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+
+  comment-service:
+    build: ./core/comment-service
+    container_name: comment-service
+    depends_on:
+      comment-db:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
     environment:
-      - SERVER_PORT=8080
-      - SPRING_APPLICATION_NAME=request-service
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka
-      - EUREKA_INSTANCE_HOSTNAME=request-service
-      - EUREKA_INSTANCE_NON_SECURE_PORT=8080
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=false
-      - EUREKA_CLIENT_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED=true
-      - SPRING_CLOUD_CONFIG_DISCOVERY_SERVICE_ID=config-server
-      - SPRING_CLOUD_CONFIG_FAIL_FAST=false
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://request-db:5432/requestdb
-      - SPRING_DATASOURCE_USERNAME=dbuser
-      - SPRING_DATASOURCE_PASSWORD=12345
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
-      - SPRING_JPA_SHOW_SQL=true
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
+      SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: comment-service
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://comment-db:5432/commentdb
+      SPRING_DATASOURCE_USERNAME: dbuser
+      SPRING_DATASOURCE_PASSWORD: 12345
+    networks:
+      - ewm-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+
+  # ========== STATS SERVICES ==========
+
+  collector:
+    build: ./stats/collector
+    container_name: collector
+    depends_on:
+      kafka:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 0
+      GRPC_SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: collector
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - ewm-network
+
+  aggregator:
+    build: ./stats/aggregator
+    container_name: aggregator
+    depends_on:
+      kafka:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: aggregator
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - ewm-network
+
+  analyzer:
+    build: ./stats/analyzer
+    container_name: analyzer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      recommendations-db:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 0
+      GRPC_SERVER_PORT: 0
+      EUREKA_INSTANCE_HOSTNAME: analyzer
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://recommendations-db:5432/recommendationsdb
+      SPRING_DATASOURCE_USERNAME: dbuser
+      SPRING_DATASOURCE_PASSWORD: 12345
+    networks:
+      - ewm-network
