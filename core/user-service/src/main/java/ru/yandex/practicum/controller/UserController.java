@@ -1,8 +1,8 @@
 package ru.yandex.practicum.controller;
 
-import feign.FeignException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import ru.yandex.practicum.dto.user.UserDto;
 import ru.yandex.practicum.dto.user.UserShortDto;
 import ru.yandex.practicum.feign.UserClient;

@@ -20,12 +20,10 @@ public interface EventMapper {
     @Mapping(target = "publishedOn", ignore = true)
     Event toEvent(NewEventDto newEventDto);
 
-    @Mapping(target = "views", source = "views")
-    EventFullDto toEventFullDto(Event event, Long views);
+    EventFullDto toEventFullDto(Event event);
 
-    @Mapping(target = "views", source = "views")
     @Mapping(target = "initiator", ignore = true)
-    EventShortDto toEventShortDto(Event event, Long views);
+    EventShortDto toEventShortDto(Event event);
 
     @Mapping(target = "id", source = "event.id")
     @Mapping(target = "title", source = "event.title")
@@ -42,7 +40,6 @@ public interface EventMapper {
     @Mapping(target = "initiator", source = "event.initiator")
     @Mapping(target = "state", source = "event.state")
     @Mapping(target = "publishedOn", source = "event.publishedOn")
-    @Mapping(target = "views", source = "event.views")
     @Mapping(target = "comments", source = "comments")
     EventWithCommentsDto toEventWithCommentsDto(EventFullDto event, List<CommentDto> comments);
 

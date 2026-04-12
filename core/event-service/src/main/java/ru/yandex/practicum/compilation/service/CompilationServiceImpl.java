@@ -58,6 +58,7 @@ public class CompilationServiceImpl implements CompilationService {
         }
 
         compilation = compilationRepository.save(compilation);
+        compilationRepository.flush();
         return compilationMapper.toCompilationDto(compilation);
     }
 
@@ -68,6 +69,7 @@ public class CompilationServiceImpl implements CompilationService {
             throw new NotFoundException("Подборка с id=" + compId + " не найдена");
         }
         compilationRepository.deleteById(compId);
+        compilationRepository.flush();
     }
 
     @Override
@@ -89,6 +91,7 @@ public class CompilationServiceImpl implements CompilationService {
         }
 
         compilation = compilationRepository.save(compilation);
+        compilationRepository.flush();
         return compilationMapper.toCompilationDto(compilation);
     }
 

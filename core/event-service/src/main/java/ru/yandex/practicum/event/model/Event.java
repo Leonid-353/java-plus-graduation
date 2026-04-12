@@ -67,4 +67,6 @@ public class Event {
     @Column(name = "published_on")
     LocalDateTime publishedOn;
 
+    @Transient
+    Double rating = 0.0;
 }

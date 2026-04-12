@@ -30,7 +30,10 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional
     public CategoryResponseDto createCategory(CategoryRequestDto categoryRequestDto) {
         validateNameCategory(categoryRequestDto);
-        return categoryMapper.toCategoryResponseDto(categoryRepository.save(categoryMapper.toCategory(categoryRequestDto)));
+        Category category = categoryMapper.toCategory(categoryRequestDto);
+        category = categoryRepository.save(category);
+        categoryRepository.flush();
+        return categoryMapper.toCategoryResponseDto(category);
     }
 
     @Override
@@ -51,6 +54,7 @@ public class CategoryServiceImpl implements CategoryService {
 
             category.setName(newName);
             category = categoryRepository.save(category);
+            categoryRepository.flush();
         }
 
         return categoryMapper.toCategoryResponseDto(category);
@@ -63,6 +67,7 @@ public class CategoryServiceImpl implements CategoryService {
             throw new ConflictException("Category in events" + id);
         }
         categoryRepository.deleteById(id);
+        categoryRepository.flush();
     }
 
     @Override
